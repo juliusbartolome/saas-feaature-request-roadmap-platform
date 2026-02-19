@@ -6,8 +6,8 @@ A portfolio-grade, full-stack SaaS MVP for collecting product feedback, prioriti
 
 - **Backend:** .NET 8, ASP.NET Core Web API, EF Core, PostgreSQL, JWT + refresh tokens, FluentValidation, Serilog, API versioning, Swagger.
 - **Frontend:** Vue 3 (Composition API), TypeScript, Pinia, Vue Router, Axios interceptors.
-- **DevOps:** Dockerfiles, docker-compose orchestration.
-- **Testing:** xUnit unit/integration test projects.
+- **DevOps:** Dockerfiles, docker-compose orchestration, GitHub Actions CI/CD pipeline.
+- **Testing:** xUnit unit, integration, and end-to-end backend test projects.
 
 ## Architecture Overview
 
@@ -104,6 +104,14 @@ npm install
 npm run dev
 ```
 
+
+## CI/CD
+
+A GitHub Actions workflow is available at `.github/workflows/ci-cd.yml`:
+
+- **CI (pull requests + pushes):** Runs backend unit, integration, and end-to-end tests, then builds the frontend.
+- **CD (main branch pushes):** Builds and publishes API and web Docker images to GHCR using the commit SHA tag.
+
 ## Deployment Notes
 
 - Build production artifacts with provided Dockerfiles.
@@ -119,6 +127,9 @@ dotnet test backend/tests/Roadmap.UnitTests/Roadmap.UnitTests.csproj
 
 # backend integration tests
 dotnet test backend/tests/Roadmap.IntegrationTests/Roadmap.IntegrationTests.csproj
+
+# backend end-to-end tests
+dotnet test backend/tests/Roadmap.E2ETests/Roadmap.E2ETests.csproj
 
 # frontend type/build check
 cd frontend && npm run build
