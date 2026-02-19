@@ -1,0 +1,34 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: postgres
+      POSTGRES_PASSWORD: postgres
+      POSTGRES_DB: roadmap
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+
+  api:
+    build:
+      context: ./backend
+    depends_on: [postgres]
+    environment:
+      ASPNETCORE_URLS: http://+:8080
+      ConnectionStrings__Default: Host=postgres;Port=5432;Database=roadmap;Username=postgres;Password=postgres
+      Jwt__Issuer: RoadmapApp
+      Jwt__Audience: RoadmapAppClient
+      Jwt__Secret: super-secret-key-change-me-super-secret-key
+    ports:
+      - "8080:8080"
+
+  web:
+    build:
+      context: ./frontend
+    depends_on: [api]
+    ports:
+      - "5173:80"
+
+volumes:
+  postgres_data:

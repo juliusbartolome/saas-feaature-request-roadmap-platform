@@ -1,0 +1,1 @@
+<template><div class="card skeleton" aria-label="loading"></div></template>
