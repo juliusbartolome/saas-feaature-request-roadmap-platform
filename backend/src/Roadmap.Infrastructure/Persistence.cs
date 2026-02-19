@@ -63,10 +63,14 @@ public class CurrentUserAccessor(IHttpContextAccessor httpContextAccessor) : ICu
         {
             var claims = httpContextAccessor.HttpContext?.User;
             if (claims?.Identity?.IsAuthenticated != true) return null;
-            var id = claims.FindFirstValue(JwtRegisteredClaimNames.Sub);
-            var email = claims.FindFirstValue(ClaimTypes.Email);
-            var role = claims.FindFirstValue(ClaimTypes.Role);
-            return id is null || email is null || role is null ? null : new CurrentUser(Guid.Parse(id), role, email);
+            var idClaim = claims.FindFirst(JwtRegisteredClaimNames.Sub);
+            var emailClaim = claims.FindFirst(ClaimTypes.Email);
+            var roleClaim = claims.FindFirst(ClaimTypes.Role);
+
+
+            return idClaim?.Value is null || emailClaim?.Value is null || roleClaim?.Value is null
+                ? null
+                : new CurrentUser(Guid.Parse(idClaim.Value), roleClaim.Value, emailClaim.Value);
         }
     }
 }
