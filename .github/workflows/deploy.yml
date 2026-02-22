@@ -122,8 +122,8 @@ jobs:
     needs: deploy-infra
     environment: develop
     outputs:
-      api_image_tag: ${{ steps.meta-api.outputs.tags }}
-      web_image_tag: ${{ steps.meta-web.outputs.tags }}
+      api_image_tag: ${{ steps.image-tags.outputs.api_tag }}
+      web_image_tag: ${{ steps.image-tags.outputs.web_tag }}
 
     steps:
       - name: Checkout code
@@ -181,6 +181,15 @@ jobs:
           cache-to: type=gha,mode=max
           build-args: |
             VITE_API_URL=${{ needs.deploy-infra.outputs.api_url }}/api/v1
+
+      - name: Extract single image tags
+        id: image-tags
+        run: |
+          # Extract only the SHA-based tag (first line) for Container Apps
+          API_TAG=$(echo "${{ steps.meta-api.outputs.tags }}" | head -n 1)
+          WEB_TAG=$(echo "${{ steps.meta-web.outputs.tags }}" | head -n 1)
+          echo "api_tag=$API_TAG" >> $GITHUB_OUTPUT
+          echo "web_tag=$WEB_TAG" >> $GITHUB_OUTPUT
 
   # ============================================================================
   # Update Apps Job - Update Container Apps with new images
