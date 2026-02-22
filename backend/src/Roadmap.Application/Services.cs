@@ -48,7 +48,7 @@ public class FeatureService(IRepository<FeatureRequest> features, IRepository<Vo
 {
     public async Task<PagedResult<FeatureResponseDto>> GetFeaturesAsync(FeatureQueryDto query, CancellationToken ct = default)
     {
-        var q = features.Query().AsNoTracking().Include(x => x.Votes).Include(x => x.Comments.Where(c => c.IsApproved));
+        var q = features.Query().AsNoTracking().Include(x => x.Votes).Include(x => x.Comments.Where(c => c.IsApproved)).AsQueryable();
         if (!string.IsNullOrWhiteSpace(query.Search)) q = q.Where(x => x.Title.Contains(query.Search));
         if (query.Status.HasValue) q = q.Where(x => x.Status == query.Status.Value);
         var total = await q.CountAsync(ct);
