@@ -248,7 +248,8 @@ jobs:
           echo "- **API Docs**: ${{ needs.deploy-infra.outputs.api_url }}/swagger" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployment Details" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: develop" >> $GITHUB_STEP_SUMMARY
+          echo "- **GitHub Environment**: develop" >> $GITHUB_STEP_SUMMARY
+          echo "- **Terraform Environment**: dev" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
 
