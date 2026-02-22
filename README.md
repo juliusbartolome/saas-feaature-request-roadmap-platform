@@ -107,7 +107,7 @@ npm run dev
 
 ## CI/CD
 
-A GitHub Actions workflow is available at `.github/workflows/ci-cd.yml`:
+A GitHub Actions workflow is available at `.github/workflows/ci.yml`:
 
 - **CI (pull requests + pushes):** Runs backend unit, integration, and end-to-end tests, then builds the frontend.
 - **CD (main branch pushes):** Builds and publishes API and web Docker images to GHCR using the commit SHA tag.
