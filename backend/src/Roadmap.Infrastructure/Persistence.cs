@@ -42,7 +42,13 @@ public class JwtTokenService(IConfiguration config) : IJwtTokenService
     {
         var key = new SymmetricSecurityKey(Encoding.UTF8.GetBytes(config["Jwt:Secret"]!));
         var creds = new SigningCredentials(key, SecurityAlgorithms.HmacSha256);
-        var claims = new[] { new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()), new Claim(ClaimTypes.Email, user.Email), new Claim(ClaimTypes.Role, user.Role) };
+        var claims = new[]
+        {
+            new Claim(JwtRegisteredClaimNames.Sub, user.Id.ToString()),
+            new Claim(JwtRegisteredClaimNames.Jti, Guid.NewGuid().ToString("N")),
+            new Claim(ClaimTypes.Email, user.Email),
+            new Claim(ClaimTypes.Role, user.Role)
+        };
         var token = new JwtSecurityToken(expires: DateTime.UtcNow.AddMinutes(20), claims: claims, signingCredentials: creds, issuer: config["Jwt:Issuer"], audience: config["Jwt:Audience"]);
         return new JwtSecurityTokenHandler().WriteToken(token);
     }
@@ -63,10 +69,14 @@ public class CurrentUserAccessor(IHttpContextAccessor httpContextAccessor) : ICu
         {
             var claims = httpContextAccessor.HttpContext?.User;
             if (claims?.Identity?.IsAuthenticated != true) return null;
-            var id = claims.FindFirstValue(JwtRegisteredClaimNames.Sub);
-            var email = claims.FindFirstValue(ClaimTypes.Email);
-            var role = claims.FindFirstValue(ClaimTypes.Role);
-            return id is null || email is null || role is null ? null : new CurrentUser(Guid.Parse(id), role, email);
+            var idClaim = claims.FindFirst(JwtRegisteredClaimNames.Sub) ?? claims.FindFirst(ClaimTypes.NameIdentifier);
+            var emailClaim = claims.FindFirst(ClaimTypes.Email);
+            var roleClaim = claims.FindFirst(ClaimTypes.Role);
+
+
+            return idClaim?.Value is null || emailClaim?.Value is null || roleClaim?.Value is null
+                ? null
+                : new CurrentUser(Guid.Parse(idClaim.Value), roleClaim.Value, emailClaim.Value);
         }
     }
 }
