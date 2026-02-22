@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - 'main'
+      - 'develop'
 
 permissions:
   contents: read
@@ -60,7 +61,7 @@ jobs:
   docker-release:
     name: Build and Publish Docker Images
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && github.event_name == 'push'
     needs: test
     permissions:
       contents: read
