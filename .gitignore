@@ -42,3 +42,12 @@ frontend/*.tsbuildinfo
 *.pid
 *.seed
 
+# Terraform
+infrastructure/terraform/.terraform/
+infrastructure/terraform/*.tfstate
+infrastructure/terraform/*.tfstate.*
+infrastructure/terraform/*.tfvars
+!infrastructure/terraform/*.tfvars.example
+infrastructure/terraform/tfplan
+infrastructure/terraform/.terraform.lock.hcl
+
