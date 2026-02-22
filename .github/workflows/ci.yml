@@ -24,16 +24,19 @@ jobs:
           dotnet-version: '8.0.x'
 
       - name: Restore backend dependencies
-        run: dotnet restore backend/tests/Roadmap.UnitTests/Roadmap.UnitTests.csproj
+        run: |
+          dotnet restore backend/tests/Roadmap.UnitTests/Roadmap.UnitTests.csproj
+          dotnet restore backend/tests/Roadmap.IntegrationTests/Roadmap.IntegrationTests.csproj
+          dotnet restore backend/tests/Roadmap.E2ETests/Roadmap.E2ETests.csproj
 
       - name: Run unit tests
         run: dotnet test backend/tests/Roadmap.UnitTests/Roadmap.UnitTests.csproj --configuration Release --no-restore
 
       - name: Run integration tests
-        run: dotnet test backend/tests/Roadmap.IntegrationTests/Roadmap.IntegrationTests.csproj --configuration Release
+        run: dotnet test backend/tests/Roadmap.IntegrationTests/Roadmap.IntegrationTests.csproj --configuration Release --no-restore
 
       - name: Run end-to-end tests
-        run: dotnet test backend/tests/Roadmap.E2ETests/Roadmap.E2ETests.csproj --configuration Release
+        run: dotnet test backend/tests/Roadmap.E2ETests/Roadmap.E2ETests.csproj --configuration Release --no-restore
 
       - name: Setup Node
         uses: actions/setup-node@v4
