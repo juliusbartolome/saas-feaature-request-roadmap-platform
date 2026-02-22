@@ -4,16 +4,17 @@
 # This workflow builds and deploys the application to Azure Container Apps
 #
 # Triggers:
-# - Push to main branch
+# - Push to develop branch
 # - Manual workflow dispatch
 #
-# Required GitHub Secrets:
+# Required GitHub Secrets (in 'develop' environment):
 # - AZURE_CREDENTIALS: Service principal credentials (JSON)
 # - POSTGRES_CONNECTION_STRING: Database connection string
 # - JWT_SECRET: JWT signing key (min 32 chars)
 #
 # Required GitHub Variables:
 # - AZURE_SUBSCRIPTION_ID: Your Azure subscription ID
+# - TFSTATE_RESOURCE_GROUP: Resource group containing terraform state storage
 # ============================================================================
 
 name: Deploy to Azure
@@ -21,19 +22,16 @@ name: Deploy to Azure
 on:
   push:
     branches:
-      - main
       - develop
   workflow_dispatch:
     inputs:
       environment:
         description: 'Environment to deploy to'
         required: true
-        default: 'dev'
+        default: 'develop'
         type: choice
         options:
-          - dev
-          - staging
-          - prod
+          - develop
 
 env:
   TERRAFORM_VERSION: '1.5.0'
@@ -48,6 +46,7 @@ jobs:
   build:
     name: Build Docker Images
     runs-on: ubuntu-latest
+    environment: develop
     outputs:
       api_image_tag: ${{ steps.meta-api.outputs.tags }}
       web_image_tag: ${{ steps.meta-web.outputs.tags }}
@@ -61,6 +60,12 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
       - name: Get Terraform outputs
         id: terraform
         working-directory: ${{ env.WORKING_DIRECTORY }}
@@ -68,34 +73,48 @@ jobs:
           terraform init \
             -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
             -backend-config="subscription_id=${{ vars.AZURE_SUBSCRIPTION_ID }}"
-          echo "acr_name=$(terraform output -raw acr_name)" >> $GITHUB_OUTPUT
-          echo "acr_login_server=$(terraform output -raw acr_login_server)" >> $GITHUB_OUTPUT
+          echo "acr_name=$(terraform output -raw acr_name 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+          echo "acr_login_server=$(terraform output -raw acr_login_server 2>/dev/null || echo '')" >> $GITHUB_OUTPUT
+
+      - name: Check if ACR exists
+        id: acr_check
+        run: |
+          if [ -z "${{ steps.terraform.outputs.acr_name }}" ]; then
+            echo "acr_exists=false" >> $GITHUB_OUTPUT
+          else
+            echo "acr_exists=true" >> $GITHUB_OUTPUT
+          fi
 
       - name: Login to Azure Container Registry
+        if: steps.acr_check.outputs.acr_exists == 'true'
         run: az acr login --name ${{ steps.terraform.outputs.acr_name }}
 
       - name: Set up Docker Buildx
+        if: steps.acr_check.outputs.acr_exists == 'true'
         uses: docker/setup-buildx-action@v3
 
       - name: Generate image metadata for API
+        if: steps.acr_check.outputs.acr_exists == 'true'
         id: meta-api
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.terraform.outputs.acr_login_server }}/featureflow-api
           tags: |
             type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
       - name: Generate image metadata for Web
+        if: steps.acr_check.outputs.acr_exists == 'true'
         id: meta-web
         uses: docker/metadata-action@v5
         with:
           images: ${{ steps.terraform.outputs.acr_login_server }}/featureflow-web
           tags: |
             type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
       - name: Build and push API image
+        if: steps.acr_check.outputs.acr_exists == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./backend
@@ -107,6 +126,7 @@ jobs:
           cache-to: type=gha,mode=max
 
       - name: Build and push Web image
+        if: steps.acr_check.outputs.acr_exists == 'true'
         uses: docker/build-push-action@v5
         with:
           context: ./frontend
@@ -126,7 +146,7 @@ jobs:
     name: Deploy to Azure
     runs-on: ubuntu-latest
     needs: build
-    environment: ${{ github.event.inputs.environment || 'dev' }}
+    environment: develop
 
     steps:
       - name: Checkout code
@@ -154,7 +174,7 @@ jobs:
         env:
           TF_VAR_postgres_connection_string: ${{ secrets.POSTGRES_CONNECTION_STRING }}
           TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
-          TF_VAR_environment: ${{ github.event.inputs.environment || 'dev' }}
+          TF_VAR_environment: dev
           TF_VAR_api_image: ${{ needs.build.outputs.api_image_tag }}
           TF_VAR_web_image: ${{ needs.build.outputs.web_image_tag }}
         run: terraform plan -out=tfplan
@@ -180,7 +200,7 @@ jobs:
           echo "- **API Docs**: ${{ steps.urls.outputs.api_url }}/swagger" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployment Details" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: ${{ github.event.inputs.environment || 'dev' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **Environment**: develop" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
 
@@ -191,6 +211,7 @@ jobs:
     name: Health Check
     runs-on: ubuntu-latest
     needs: deploy
+    environment: develop
 
     steps:
       - name: Checkout code
@@ -205,6 +226,7 @@ jobs:
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
       - name: Get URLs
         id: urls
