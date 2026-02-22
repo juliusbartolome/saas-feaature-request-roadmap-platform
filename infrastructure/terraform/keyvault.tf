@@ -3,7 +3,8 @@
 # ============================================================================
 
 resource "azurerm_key_vault" "main" {
-  name                       = "kv-${var.project_name}-${var.environment}-${local.unique_suffix}"
+  # Key Vault name must be 3-24 chars, alphanumeric and dashes only
+  name                       = "kv-ff-${var.environment}-${local.unique_suffix}"
   location                   = azurerm_resource_group.main.location
   resource_group_name        = azurerm_resource_group.main.name
   tenant_id                  = data.azurerm_client_config.current.tenant_id
