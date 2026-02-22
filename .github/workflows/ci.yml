@@ -29,11 +29,17 @@ jobs:
       - name: Run unit tests
         run: dotnet test backend/tests/Roadmap.UnitTests/Roadmap.UnitTests.csproj --configuration Release --no-restore
 
+      - name: Restore integration test dependencies
+        run: dotnet restore backend/tests/Roadmap.IntegrationTests/Roadmap.IntegrationTests.csproj
+
       - name: Run integration tests
-        run: dotnet test backend/tests/Roadmap.IntegrationTests/Roadmap.IntegrationTests.csproj --configuration Release
+        run: dotnet test backend/tests/Roadmap.IntegrationTests/Roadmap.IntegrationTests.csproj --configuration Release --no-restore
+
+      - name: Restore E2E test dependencies
+        run: dotnet restore backend/tests/Roadmap.E2ETests/Roadmap.E2ETests.csproj
 
       - name: Run end-to-end tests
-        run: dotnet test backend/tests/Roadmap.E2ETests/Roadmap.E2ETests.csproj --configuration Release
+        run: dotnet test backend/tests/Roadmap.E2ETests/Roadmap.E2ETests.csproj --configuration Release --no-restore
 
       - name: Setup Node
         uses: actions/setup-node@v4
