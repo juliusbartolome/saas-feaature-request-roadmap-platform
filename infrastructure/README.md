@@ -118,6 +118,9 @@ Navigate to **Settings > Secrets and variables > Actions** in your repository.
 | Secret Name | Description | How to Get |
 |-------------|-------------|------------|
 | `AZURE_CREDENTIALS` | Service principal JSON | See below |
+| `AZURE_CLIENT_ID` | Azure AD application (service principal) client ID used for Terraform auth | From the `clientId`/`appId` field of the `AZURE_CREDENTIALS` JSON |
+| `AZURE_CLIENT_SECRET` | Azure AD application (service principal) client secret used for Terraform auth | From the `clientSecret`/`password` field of the `AZURE_CREDENTIALS` JSON |
+| `AZURE_TENANT_ID` | Azure AD tenant ID used for Terraform auth | From the `tenantId` field of the `AZURE_CREDENTIALS` JSON |
 | `POSTGRES_CONNECTION_STRING` | Database connection string | Your PostgreSQL connection string |
 | `JWT_SECRET` | JWT signing key | Generate: `openssl rand -base64 32` |
 
