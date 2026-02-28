@@ -1,0 +1,54 @@
+# ============================================================================
+# FeatureFlow - Terraform Variables Example
+# ============================================================================
+# Copy this file to terraform.tfvars and fill in your values:
+#   cp terraform.tfvars.example terraform.tfvars
+#
+# IMPORTANT: Never commit terraform.tfvars to version control!
+# ============================================================================
+
+# ============================================================================
+# General Configuration
+# ============================================================================
+
+project_name = "featureflow"
+environment  = "dev"
+location     = "eastus"
+
+# ============================================================================
+# Database Configuration
+# ============================================================================
+# Connection string to your existing PostgreSQL database
+# Format: Host=<host>;Port=5432;Database=<db>;Username=<user>;Password=<pass>
+
+postgres_connection_string = "Host=your-postgres-server.postgres.database.azure.com;Port=5432;Database=roadmap;Username=your_username;Password=your_password;SSL Mode=Require"
+
+# ============================================================================
+# JWT Configuration
+# ============================================================================
+# Secret key for JWT token signing (minimum 32 characters)
+# Generate a secure key: openssl rand -base64 32
+
+jwt_secret   = "your-super-secret-jwt-key-minimum-32-characters-long"
+jwt_issuer   = "FeatureFlow"
+jwt_audience = "FeatureFlowClient"
+
+# ============================================================================
+# Container Apps Configuration (Optional - using cost-optimized defaults)
+# ============================================================================
+
+# api_cpu      = "0.25"
+# api_memory   = "0.5Gi"
+# web_cpu      = "0.25"
+# web_memory   = "0.5Gi"
+# min_replicas = 0    # Scale to zero when idle
+# max_replicas = 1    # Single instance for dev
+
+# ============================================================================
+# Container Images (Optional - overridden by CI/CD)
+# ============================================================================
+# These are placeholder images used for initial deployment.
+# GitHub Actions will update these with actual application images.
+
+# api_image = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"
+# web_image = "mcr.microsoft.com/azuredocs/containerapps-helloworld:latest"

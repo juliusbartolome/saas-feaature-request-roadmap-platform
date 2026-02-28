@@ -5,6 +5,7 @@ on:
   push:
     branches:
       - 'main'
+      - 'develop'
 
 permissions:
   contents: read
@@ -60,7 +61,6 @@ jobs:
   docker-release:
     name: Build and Publish Docker Images
     runs-on: ubuntu-latest
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
     needs: test
     permissions:
       contents: read
@@ -81,7 +81,8 @@ jobs:
         id: meta
         run: |
           echo "owner=${GITHUB_REPOSITORY_OWNER,,}" >> "$GITHUB_OUTPUT"
-          echo "repo=$(basename \"$GITHUB_REPOSITORY\" | tr '[:upper:]' '[:lower:]')" >> "$GITHUB_OUTPUT"
+          REPO_NAME=$(basename "$GITHUB_REPOSITORY" | tr '[:upper:]' '[:lower:]')
+          echo "repo=${REPO_NAME}" >> "$GITHUB_OUTPUT"
 
       - name: Build and push API image
         uses: docker/build-push-action@v6
