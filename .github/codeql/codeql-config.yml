@@ -1,0 +1,20 @@
+name: "CodeQL Custom Configuration"
+
+# Use the security-and-quality query suite for comprehensive scanning
+# This includes security-extended queries plus code quality/maintainability checks
+queries:
+  - uses: security-and-quality
+
+paths-ignore:
+  # Test projects - not production code
+  - backend/tests/**
+  # Infrastructure as Code - not analyzed by CodeQL
+  - infrastructure/**
+  # Dependencies and build output
+  - "**/node_modules/**"
+  - "**/dist/**"
+  - "**/bin/**"
+  - "**/obj/**"
+  # Minified files
+  - "**/*.min.js"
+  - "**/*.min.css"
