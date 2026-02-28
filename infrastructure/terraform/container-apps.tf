@@ -88,20 +88,20 @@ resource "azurerm_container_app" "api" {
       }
 
       liveness_probe {
+        # Note: initial_delay_seconds is not supported by the azurerm provider for Container Apps probes
         path                    = "/health"
         port                    = 8080
         transport               = "HTTP"
-        initial_delay           = 10
         interval_seconds        = 30
         timeout                 = 5
         failure_count_threshold = 3
       }
 
       readiness_probe {
+        # Note: initial_delay_seconds is not supported by the azurerm provider for Container Apps probes
         path                    = "/health"
         port                    = 8080
         transport               = "HTTP"
-        initial_delay           = 5
         interval_seconds        = 10
         timeout                 = 5
         failure_count_threshold = 3
@@ -172,7 +172,6 @@ resource "azurerm_container_app" "web" {
         path                    = "/"
         port                    = 80
         transport               = "HTTP"
-        initial_delay           = 5
         interval_seconds        = 30
         timeout                 = 5
         failure_count_threshold = 3

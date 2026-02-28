@@ -60,5 +60,10 @@ app.UseHttpsRedirection();
 app.UseAuthentication();
 app.UseAuthorization();
 app.MapControllers().RequireRateLimiting("api");
+
+// Health check endpoint for container orchestration
+app.MapGet("/health", () => Results.Ok(new { status = "healthy", timestamp = DateTime.UtcNow }))
+   .ExcludeFromDescription();
+
 app.Run();
 public partial class Program { }

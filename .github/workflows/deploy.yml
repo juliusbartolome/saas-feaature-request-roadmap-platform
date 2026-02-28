@@ -4,16 +4,20 @@
 # This workflow builds and deploys the application to Azure Container Apps
 #
 # Triggers:
-# - Push to main branch
+# - Push to develop branch
 # - Manual workflow dispatch
 #
-# Required GitHub Secrets:
-# - AZURE_CREDENTIALS: Service principal credentials (JSON)
+# Required GitHub Secrets (in 'develop' environment):
+# - AZURE_CREDENTIALS: Service principal credentials (JSON) - for Azure CLI
+# - AZURE_CLIENT_ID: Service principal client ID - for Terraform
+# - AZURE_CLIENT_SECRET: Service principal client secret - for Terraform
+# - AZURE_TENANT_ID: Azure AD tenant ID - for Terraform
 # - POSTGRES_CONNECTION_STRING: Database connection string
 # - JWT_SECRET: JWT signing key (min 32 chars)
 #
 # Required GitHub Variables:
 # - AZURE_SUBSCRIPTION_ID: Your Azure subscription ID
+# - TFSTATE_RESOURCE_GROUP: Resource group containing terraform state storage
 # ============================================================================
 
 name: Deploy to Azure
@@ -21,19 +25,8 @@ name: Deploy to Azure
 on:
   push:
     branches:
-      - main
       - develop
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy to'
-        required: true
-        default: 'dev'
-        type: choice
-        options:
-          - dev
-          - staging
-          - prod
 
 env:
   TERRAFORM_VERSION: '1.5.0'
@@ -43,14 +36,86 @@ env:
 
 jobs:
   # ============================================================================
-  # Build Job - Build Docker images for API and Web
+  # Deploy Infrastructure Job - Create Azure resources with Terraform
+  # ============================================================================
+  deploy-infra:
+    name: Deploy Infrastructure
+    runs-on: ubuntu-latest
+    environment: develop
+    outputs:
+      acr_name: ${{ steps.terraform-outputs.outputs.acr_name }}
+      acr_login_server: ${{ steps.terraform-outputs.outputs.acr_login_server }}
+      api_url: ${{ steps.terraform-outputs.outputs.api_url }}
+      web_url: ${{ steps.terraform-outputs.outputs.web_url }}
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup Terraform
+        uses: hashicorp/setup-terraform@v3
+        with:
+          terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
+
+      - name: Terraform Init
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          terraform init \
+            -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
+            -backend-config="subscription_id=${{ vars.AZURE_SUBSCRIPTION_ID }}"
+
+      - name: Terraform Plan
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+          TF_VAR_postgres_connection_string: ${{ secrets.POSTGRES_CONNECTION_STRING }}
+          TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
+          TF_VAR_environment: dev
+        run: terraform plan -out=tfplan
+
+      - name: Terraform Apply
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: terraform apply -auto-approve tfplan
+
+      - name: Get Terraform Outputs
+        id: terraform-outputs
+        working-directory: ${{ env.WORKING_DIRECTORY }}
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
+        run: |
+          echo "acr_name=$(terraform output -raw acr_name)" >> $GITHUB_OUTPUT
+          echo "acr_login_server=$(terraform output -raw acr_login_server)" >> $GITHUB_OUTPUT
+          echo "api_url=$(terraform output -raw api_url)" >> $GITHUB_OUTPUT
+          echo "web_url=$(terraform output -raw web_url)" >> $GITHUB_OUTPUT
+
+  # ============================================================================
+  # Build Job - Build and push Docker images
   # ============================================================================
   build:
     name: Build Docker Images
     runs-on: ubuntu-latest
+    needs: deploy-infra
+    environment: develop
     outputs:
-      api_image_tag: ${{ steps.meta-api.outputs.tags }}
-      web_image_tag: ${{ steps.meta-web.outputs.tags }}
+      api_image_tag: ${{ steps.image-tags.outputs.api_tag }}
+      web_image_tag: ${{ steps.image-tags.outputs.web_tag }}
 
     steps:
       - name: Checkout code
@@ -61,18 +126,22 @@ jobs:
         with:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
-      - name: Get Terraform outputs
-        id: terraform
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-        run: |
-          terraform init \
-            -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
-            -backend-config="subscription_id=${{ vars.AZURE_SUBSCRIPTION_ID }}"
-          echo "acr_name=$(terraform output -raw acr_name)" >> $GITHUB_OUTPUT
-          echo "acr_login_server=$(terraform output -raw acr_login_server)" >> $GITHUB_OUTPUT
-
       - name: Login to Azure Container Registry
-        run: az acr login --name ${{ steps.terraform.outputs.acr_name }}
+        run: |
+          ACR_NAME='${{ needs.deploy-infra.outputs.acr_name }}'
+          echo "Attempting to login to Azure Container Registry: $ACR_NAME"
+          for i in {1..10}; do
+            echo "Checking ACR availability (attempt $i)..."
+            if az acr show -n "$ACR_NAME" >/dev/null 2>&1; then
+              echo "ACR $ACR_NAME is available. Logging in..."
+              az acr login --name "$ACR_NAME"
+              exit 0
+            fi
+            echo "ACR $ACR_NAME not ready yet. Waiting 15 seconds before retrying..."
+            sleep 15
+          done
+          echo "ERROR: ACR $ACR_NAME did not become available in time." >&2
+          exit 1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -81,19 +150,19 @@ jobs:
         id: meta-api
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.terraform.outputs.acr_login_server }}/featureflow-api
+          images: ${{ needs.deploy-infra.outputs.acr_login_server }}/featureflow-api
           tags: |
             type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
       - name: Generate image metadata for Web
         id: meta-web
         uses: docker/metadata-action@v5
         with:
-          images: ${{ steps.terraform.outputs.acr_login_server }}/featureflow-web
+          images: ${{ needs.deploy-infra.outputs.acr_login_server }}/featureflow-web
           tags: |
             type=sha,prefix=
-            type=raw,value=latest,enable={{is_default_branch}}
+            type=raw,value=latest
 
       - name: Build and push API image
         uses: docker/build-push-action@v5
@@ -117,70 +186,76 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
           build-args: |
-            VITE_API_URL=https://placeholder.azurecontainerapps.io/api/v1
+            VITE_API_URL=${{ needs.deploy-infra.outputs.api_url }}/api/v1
+
+      - name: Extract single image tags
+        id: image-tags
+        run: |
+          # Extract only the SHA-based tag (first line) for Container Apps
+          API_TAG=$(echo "${{ steps.meta-api.outputs.tags }}" | head -n 1)
+          WEB_TAG=$(echo "${{ steps.meta-web.outputs.tags }}" | head -n 1)
+          echo "api_tag=$API_TAG" >> $GITHUB_OUTPUT
+          echo "web_tag=$WEB_TAG" >> $GITHUB_OUTPUT
 
   # ============================================================================
-  # Deploy Job - Deploy to Azure Container Apps
+  # Update Apps Job - Update Container Apps with new images
   # ============================================================================
-  deploy:
-    name: Deploy to Azure
+  update-apps:
+    name: Update Container Apps
     runs-on: ubuntu-latest
-    needs: build
-    environment: ${{ github.event.inputs.environment || 'dev' }}
+    needs: [deploy-infra, build]
+    environment: develop
 
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
       - name: Setup Terraform
         uses: hashicorp/setup-terraform@v3
         with:
           terraform_version: ${{ env.TERRAFORM_VERSION }}
+          terraform_wrapper: false
 
       - name: Terraform Init
         working-directory: ${{ env.WORKING_DIRECTORY }}
+        env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
         run: |
           terraform init \
             -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
             -backend-config="subscription_id=${{ vars.AZURE_SUBSCRIPTION_ID }}"
 
-      - name: Terraform Plan
+      - name: Update Container Apps with new images
         working-directory: ${{ env.WORKING_DIRECTORY }}
         env:
+          ARM_CLIENT_ID: ${{ secrets.AZURE_CLIENT_ID }}
+          ARM_CLIENT_SECRET: ${{ secrets.AZURE_CLIENT_SECRET }}
+          ARM_SUBSCRIPTION_ID: ${{ vars.AZURE_SUBSCRIPTION_ID }}
+          ARM_TENANT_ID: ${{ secrets.AZURE_TENANT_ID }}
           TF_VAR_postgres_connection_string: ${{ secrets.POSTGRES_CONNECTION_STRING }}
           TF_VAR_jwt_secret: ${{ secrets.JWT_SECRET }}
-          TF_VAR_environment: ${{ github.event.inputs.environment || 'dev' }}
+          TF_VAR_environment: dev
           TF_VAR_api_image: ${{ needs.build.outputs.api_image_tag }}
           TF_VAR_web_image: ${{ needs.build.outputs.web_image_tag }}
-        run: terraform plan -out=tfplan
-
-      - name: Terraform Apply
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-        run: terraform apply -auto-approve tfplan
-
-      - name: Get deployment URLs
-        id: urls
-        working-directory: ${{ env.WORKING_DIRECTORY }}
         run: |
-          echo "api_url=$(terraform output -raw api_url)" >> $GITHUB_OUTPUT
-          echo "web_url=$(terraform output -raw web_url)" >> $GITHUB_OUTPUT
+          terraform plan -out=tfplan
+          terraform apply -auto-approve tfplan
 
       - name: Deployment Summary
         run: |
           echo "## Deployment Successful! :rocket:" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Application URLs" >> $GITHUB_STEP_SUMMARY
-          echo "- **Web App**: ${{ steps.urls.outputs.web_url }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **API**: ${{ steps.urls.outputs.api_url }}" >> $GITHUB_STEP_SUMMARY
-          echo "- **API Docs**: ${{ steps.urls.outputs.api_url }}/swagger" >> $GITHUB_STEP_SUMMARY
+          echo "- **Web App**: ${{ needs.deploy-infra.outputs.web_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **API**: ${{ needs.deploy-infra.outputs.api_url }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **API Docs**: ${{ needs.deploy-infra.outputs.api_url }}/swagger" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Deployment Details" >> $GITHUB_STEP_SUMMARY
-          echo "- **Environment**: ${{ github.event.inputs.environment || 'dev' }}" >> $GITHUB_STEP_SUMMARY
+          echo "- **GitHub Environment**: develop" >> $GITHUB_STEP_SUMMARY
+          echo "- **Terraform Environment**: dev" >> $GITHUB_STEP_SUMMARY
           echo "- **Commit**: ${{ github.sha }}" >> $GITHUB_STEP_SUMMARY
           echo "- **Triggered by**: ${{ github.actor }}" >> $GITHUB_STEP_SUMMARY
 
@@ -190,39 +265,17 @@ jobs:
   health-check:
     name: Health Check
     runs-on: ubuntu-latest
-    needs: deploy
+    needs: [deploy-infra, update-apps]
+    environment: develop
 
     steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Azure Login
-        uses: azure/login@v2
-        with:
-          creds: ${{ secrets.AZURE_CREDENTIALS }}
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: ${{ env.TERRAFORM_VERSION }}
-
-      - name: Get URLs
-        id: urls
-        working-directory: ${{ env.WORKING_DIRECTORY }}
-        run: |
-          terraform init \
-            -backend-config="resource_group_name=${{ vars.TFSTATE_RESOURCE_GROUP }}" \
-            -backend-config="subscription_id=${{ vars.AZURE_SUBSCRIPTION_ID }}"
-          echo "api_url=$(terraform output -raw api_url)" >> $GITHUB_OUTPUT
-          echo "web_url=$(terraform output -raw web_url)" >> $GITHUB_OUTPUT
-
       - name: Wait for containers to start
-        run: sleep 30
+        run: sleep 90
 
       - name: Check API health
         run: |
           for i in {1..5}; do
-            response=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.urls.outputs.api_url }}/health" || echo "000")
+            response=$(curl -s -o /dev/null -w "%{http_code}" "${{ needs.deploy-infra.outputs.api_url }}/health" || echo "000")
             if [ "$response" = "200" ]; then
               echo "API is healthy!"
               exit 0
@@ -236,7 +289,7 @@ jobs:
       - name: Check Web health
         run: |
           for i in {1..5}; do
-            response=$(curl -s -o /dev/null -w "%{http_code}" "${{ steps.urls.outputs.web_url }}" || echo "000")
+            response=$(curl -s -o /dev/null -w "%{http_code}" "${{ needs.deploy-infra.outputs.web_url }}" || echo "000")
             if [ "$response" = "200" ]; then
               echo "Web app is healthy!"
               exit 0
