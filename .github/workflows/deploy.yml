@@ -27,14 +27,6 @@ on:
     branches:
       - develop
   workflow_dispatch:
-    inputs:
-      environment:
-        description: 'Environment to deploy to'
-        required: true
-        default: 'develop'
-        type: choice
-        options:
-          - develop
 
 env:
   TERRAFORM_VERSION: '1.5.0'
@@ -135,7 +127,21 @@ jobs:
           creds: ${{ secrets.AZURE_CREDENTIALS }}
 
       - name: Login to Azure Container Registry
-        run: az acr login --name ${{ needs.deploy-infra.outputs.acr_name }}
+        run: |
+          ACR_NAME='${{ needs.deploy-infra.outputs.acr_name }}'
+          echo "Attempting to login to Azure Container Registry: $ACR_NAME"
+          for i in {1..10}; do
+            echo "Checking ACR availability (attempt $i)..."
+            if az acr show -n "$ACR_NAME" >/dev/null 2>&1; then
+              echo "ACR $ACR_NAME is available. Logging in..."
+              az acr login --name "$ACR_NAME"
+              exit 0
+            fi
+            echo "ACR $ACR_NAME not ready yet. Waiting 15 seconds before retrying..."
+            sleep 15
+          done
+          echo "ERROR: ACR $ACR_NAME did not become available in time." >&2
+          exit 1
 
       - name: Set up Docker Buildx
         uses: docker/setup-buildx-action@v3
@@ -264,7 +270,7 @@ jobs:
 
     steps:
       - name: Wait for containers to start
-        run: sleep 30
+        run: sleep 60
 
       - name: Check API health
         run: |
