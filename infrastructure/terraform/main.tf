@@ -11,10 +11,6 @@ terraform {
       source  = "hashicorp/azurerm"
       version = "~> 3.85"
     }
-    azuread = {
-      source  = "hashicorp/azuread"
-      version = "~> 2.47"
-    }
     random = {
       source  = "hashicorp/random"
       version = "~> 3.6"
@@ -35,15 +31,11 @@ provider "azurerm" {
   }
 }
 
-provider "azuread" {}
-
 # ============================================================================
 # Data Sources
 # ============================================================================
 
 data "azurerm_client_config" "current" {}
-
-data "azuread_client_config" "current" {}
 
 # ============================================================================
 # Random Suffix for Unique Resource Names
