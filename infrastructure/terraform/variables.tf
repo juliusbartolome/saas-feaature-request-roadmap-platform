@@ -129,6 +129,9 @@ variable "web_image" {
 
 # ============================================================================
 # Terraform State Backend Configuration
+# Note: The Terraform backend is configured via `terraform init -backend-config=...`
+# and cannot reference input variables. The values below are for documentation
+# purposes only and are not used by the backend block in backend.tf.
 # ============================================================================
 
 variable "tfstate_resource_group" {

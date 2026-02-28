@@ -59,7 +59,7 @@ resource "azurerm_container_app" "api" {
 
       env {
         name  = "ASPNETCORE_ENVIRONMENT"
-        value = var.environment == "prod" ? "Production" : "Development"
+        value = var.environment == "prod" ? "Production" : var.environment == "staging" ? "Staging" : "Development"
       }
 
       env {

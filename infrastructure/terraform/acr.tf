@@ -3,7 +3,7 @@
 # ============================================================================
 
 resource "azurerm_container_registry" "main" {
-  name                = "acr${var.project_name}${var.environment}${local.unique_suffix}"
+  name                = "acr${replace(var.project_name, "-", "")}${var.environment}${local.unique_suffix}"
   resource_group_name = azurerm_resource_group.main.name
   location            = azurerm_resource_group.main.location
   sku                 = "Basic"

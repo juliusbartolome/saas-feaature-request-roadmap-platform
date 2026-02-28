@@ -118,6 +118,9 @@ Navigate to **Settings > Secrets and variables > Actions** in your repository.
 | Secret Name | Description | How to Get |
 |-------------|-------------|------------|
 | `AZURE_CREDENTIALS` | Service principal JSON | See below |
+| `AZURE_CLIENT_ID` | Service principal client ID for Terraform auth | From `clientId`/`appId` field of `AZURE_CREDENTIALS` JSON |
+| `AZURE_CLIENT_SECRET` | Service principal client secret for Terraform auth | From `clientSecret`/`password` field of `AZURE_CREDENTIALS` JSON |
+| `AZURE_TENANT_ID` | Azure AD tenant ID for Terraform auth | From `tenantId` field of `AZURE_CREDENTIALS` JSON |
 | `POSTGRES_CONNECTION_STRING` | Database connection string | Your PostgreSQL connection string |
 | `JWT_SECRET` | JWT signing key | Generate: `openssl rand -base64 32` |
 
@@ -131,10 +134,10 @@ Navigate to **Settings > Secrets and variables > Actions** in your repository.
 ### Creating Azure Service Principal
 
 ```bash
-# Create service principal with Contributor access
+# Create service principal with Owner access (required to create role assignments for ACR and Key Vault)
 az ad sp create-for-rbac \
   --name "github-actions-featureflow" \
-  --role Contributor \
+  --role Owner \
   --scopes /subscriptions/<subscription-id> \
   --sdk-auth
 
@@ -176,7 +179,7 @@ az role assignment create \
 ### Triggering Deployments
 
 Deployments are triggered automatically on:
-- Push to `main` branch
+- Push to `develop` branch
 - Manual trigger via GitHub Actions UI (workflow_dispatch)
 
 ## Resource Details
