@@ -88,6 +88,7 @@ resource "azurerm_container_app" "api" {
       }
 
       liveness_probe {
+        # Note: initial_delay_seconds is not supported by the azurerm provider for Container Apps probes
         path                    = "/health"
         port                    = 8080
         transport               = "HTTP"
@@ -97,6 +98,7 @@ resource "azurerm_container_app" "api" {
       }
 
       readiness_probe {
+        # Note: initial_delay_seconds is not supported by the azurerm provider for Container Apps probes
         path                    = "/health"
         port                    = 8080
         transport               = "HTTP"
